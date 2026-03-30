@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>UR BATTLE · Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <style>
+        .modal-overlay { background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); }
+        .bottom-nav a.active i, .bottom-nav a.active span { color: #0d9488; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+
+<div class="max-w-md mx-auto bg-gray-50 min-h-screen shadow-xl relative pb-20">
+    <div class="sticky top-0 z-20 bg-white/90 backdrop-blur-sm shadow-sm border-b px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-crown text-amber-500 text-xl"></i>
+            <h1 class="text-xl font-extrabold bg-gradient-to-r from-amber-700 to-rose-600 bg-clip-text text-transparent">UR BATTLE · ADMIN</h1>
+        </div>
+        <div id="adminEmailBadge" class="text-xs bg-gray-200 px-2 py-1 rounded-full truncate max-w-[120px]"></div>
+    </div>
+
+    <div id="appContent" class="px-4 py-4 space-y-5"></div>
+
+    <div id="bottomNav" class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t flex justify-around py-2 shadow-2xl hidden">
+        <a href="#" data-nav="dashboard" class="flex flex-col items-center text-gray-500"><i class="fas fa-tachometer-alt text-xl"></i><span class="text-[11px]">Dashboard</span></a>
+        <a href="#" data-nav="tournaments" class="flex flex-col items-center text-gray-500"><i class="fas fa-gamepad text-xl"></i><span class="text-[11px]">Tourneys</span></a>
+        <a href="#" data-nav="requests" class="flex flex-col items-center text-gray-500"><i class="fas fa-hand-holding-usd text-xl"></i><span class="text-[11px]">Requests</span></a>
+        <a href="#" data-nav="users" class="flex flex-col items-center text-gray-500"><i class="fas fa-users text-xl"></i><span class="text-[11px]">Users</span></a>
+        <a href="#" data-nav="settings" class="flex flex-col items-center text-gray-500"><i class="fas fa-sliders-h text-xl"></i><span class="text-[11px]">Settings</span></a>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCFrTLdB3OVrnKgC7y0awui_8V9XW04pEY",
+        authDomain: "ur-battle.firebaseapp.com",
+        databaseURL: "https://ur-battle-default-rtdb.firebaseio.com",
+        projectId: "ur-battle",
+        storageBucket: "ur-battle.firebasestorage.app",
+        messagingSenderId: "246704992806",
+        appId: "1:246704992806:web:671a5a5b8912d69cdf2ce7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    let adminUser = null;
+    let currentSection = 'dashboard';
+    function toast(msg) { alert(msg); }
+
+    const ADMIN_EMAIL = "admin@urbattle.com";
+    const ADMIN_PASSWORD = "admin123";
+
+    async function isAdmin(user) { return user && user.email === ADMIN_EMAIL; }
+
+    async function updateWallet(uid, delta, reason) {
+        const userRef = db.ref(`/users/${uid}/wallet`);
+        const snap = await userRef.once('value');
+        let cur = snap.val() || 0;
+        let bal = cur + delta;
+        if (bal < 0) throw new Error("Insufficient");
+        await userRef.set(bal);
+        await db.ref(`/users/${uid}/transactions`).push({ type: delta>0?'credit':'debit', amount: Math.abs(delta), description: reason, timestamp: Date.now() });
+    }
+
+    function renderAdminLogin() {
+        document.getElementById('appContent').innerHTML = `
+            <div class="bg-white rounded-2xl shadow-xl p-6 mt-12">
+                <div class="text-center mb-4"><i class="fas fa-shield-alt text-5xl text-amber-500"></i><h2 class="text-2xl font-bold">Admin Login</h2></div>
+                <input type="email" id="adminEmail" placeholder="Email" value="${ADMIN_EMAIL}" class="w-full border rounded-xl p-3 mb-3">
+                <input type="password" id="adminPassword" placeholder="Password" value="${ADMIN_PASSWORD}" class="w-full border rounded-xl p-3 mb-4">
+                <button id="adminLoginBtn" class="w-full bg-amber-600 text-white py-3 rounded-xl">Login</button>
+            </div>
+        `;
+        document.getElementById('adminLoginBtn').onclick = async () => {
+            try {
+                const cred = await auth.signInWithEmailAndPassword(document.getElementById('adminEmail').value, document.getElementById('adminPassword').value);
+                if (await isAdmin(cred.user)) toast("Login success");
+                else { await auth.signOut(); toast("Unauthorized"); }
+            } catch(e) { toast(e.message); }
+        };
+    }
+
+    async function renderDashboard() {
+        document.getElementById('appContent').innerHTML = `<div><h2 class="font-bold text-xl">Dashboard</h2><div class="grid grid-cols-2 gap-3 mt-3" id="statsCards"></div><button id="createTourneyBtn" class="w-full bg-blue-600 text-white py-3 rounded-xl mt-4">+ Create Tournament</button></div>`;
+        const users = (await db.ref('/users').once('value')).val() || {};
+        const tourneys = (await db.ref('/tournaments').once('value')).val() || {};
+        let totalPrize = 0, revenue = 0;
+        for (let t of Object.values(tourneys)) {
+            totalPrize += t.winningPrize || t.prize_pool || 0;
+            revenue += (t.entryFee||0) * (t.participants?Object.keys(t.participants).length:0) * 0.05;
+        }
+        document.getElementById('statsCards').innerHTML = `
+            <div class="bg-white p-4 rounded-xl text-center"><i class="fas fa-users text-blue-500"></i><p class="text-2xl font-bold">${Object.keys(users).length}</p><p class="text-xs">Users</p></div>
+            <div class="bg-white p-4 rounded-xl text-center"><i class="fas fa-trophy text-green-500"></i><p class="text-2xl font-bold">${Object.keys(tourneys).length}</p><p class="text-xs">Tournaments</p></div>
+            <div class="bg-white p-4 rounded-xl text-center"><i class="fas fa-coins text-yellow-500"></i><p class="text-2xl font-bold">₹${totalPrize}</p><p class="text-xs">Prize Pool</p></div>
+            <div class="bg-white p-4 rounded-xl text-center"><i class="fas fa-chart-line text-teal-500"></i><p class="text-2xl font-bold">₹${Math.floor(revenue)}</p><p class="text-xs">Revenue</p></div>
+        `;
+        document.getElementById('createTourneyBtn').onclick = () => showCreateTournamentModal();
+    }
+
+    // ---------- CREATE TOURNAMENT MODAL ----------
+    function showCreateTournamentModal() {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 modal-overlay flex items-center justify-center z-50 p-3';
+        modal.innerHTML = `
+            <div class="bg-white rounded-2xl max-w-md w-full max-h-[85vh] overflow-y-auto p-5 space-y-2">
+                <h3 class="font-bold text-lg mb-2">Create Tournament</h3>
+                <input id="gameName" placeholder="Game Name" class="border p-2 rounded w-full">
+                <input id="matchTitle" placeholder="Match Title" class="border p-2 rounded w-full">
+                <select id="matchType" class="border p-2 rounded w-full"><option>Solo</option><option>Duo</option><option>Squad</option></select>
+                <input id="entryFee" type="number" placeholder="Entry Fee (₹)" class="border p-2 rounded w-full">
+                <input id="perKillReward" type="number" placeholder="Per Kill Reward (₹)" class="border p-2 rounded w-full">
+                <input id="winningPrize" type="number" placeholder="Winning Prize (₹)" class="border p-2 rounded w-full">
+                <input id="secondPrize" type="number" placeholder="2nd Prize (₹)" class="border p-2 rounded w-full">
+                <input id="thirdPrize" type="number" placeholder="3rd Prize (₹)" class="border p-2 rounded w-full">
+                <input id="totalSlots" type="number" placeholder="Total Slots" class="border p-2 rounded w-full">
+                <input id="matchDateTime" type="datetime-local" class="border p-2 rounded w-full">
+                <input id="regLastTime" type="datetime-local" class="border p-2 rounded w-full">
+                <input id="roomId" placeholder="Room ID" class="border p-2 rounded w-full">
+                <input id="roomPassword" placeholder="Room Password" class="border p-2 rounded w-full">
+                <input id="map" placeholder="Map" class="border p-2 rounded w-full">
+                <input id="mode" placeholder="Mode" class="border p-2 rounded w-full">
+                <select id="status" class="border p-2 rounded w-full"><option>Upcoming</option><option>Live</option><option>Completed</option></select>
+                <textarea id="rules" placeholder="Rules" rows="2" class="border p-2 rounded w-full"></textarea>
+                <input id="bannerUrl" placeholder="Banner URL" class="border p-2 rounded w-full">
+                <div class="flex gap-2 mt-3"><button id="confirmCreateBtn" class="bg-blue-600 text-white flex-1 py-2 rounded">Create</button><button id="cancelCreateBtn" class="bg-gray-300 flex-1 py-2 rounded">Cancel</button></div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.getElementById('cancelCreateBtn').onclick = () => modal.remove();
+        document.getElementById('confirmCreateBtn').onclick = async () => {
+            const gameName = document.getElementById('gameName').value.trim();
+            const matchTitle = document.getElementById('matchTitle').value.trim();
+            const matchType = document.getElementById('matchType').value;
+            const entryFee = parseInt(document.getElementById('entryFee').value);
+            const perKillReward = parseInt(document.getElementById('perKillReward').value) || 0;
+            const winningPrize = parseInt(document.getElementById('winningPrize').value);
+            const secondPrize = parseInt(document.getElementById('secondPrize').value) || 0;
+            const thirdPrize = parseInt(document.getElementById('thirdPrize').value) || 0;
+            const totalSlots = parseInt(document.getElementById('totalSlots').value);
+            const matchDateTime = new Date(document.getElementById('matchDateTime').value).getTime();
+            const regLastTime = new Date(document.getElementById('regLastTime').value).getTime();
+            const roomId = document.getElementById('roomId').value.trim();
+            const roomPassword = document.getElementById('roomPassword').value.trim();
+            const map = document.getElementById('map').value.trim();
+            const mode = document.getElementById('mode').value.trim();
+            const status = document.getElementById('status').value;
+            const rules = document.getElementById('rules').value.trim();
+            const bannerUrl = document.getElementById('bannerUrl').value.trim();
+            if (!gameName || !matchTitle || !entryFee || !winningPrize || !totalSlots || !matchDateTime || !regLastTime) {
+                toast("Please fill all required fields");
+                return;
+            }
+            const tournamentData = { gameName, matchTitle, matchType, entryFee, perKillReward, winningPrize, secondPrize, thirdPrize, totalSlots, matchDateTime, regLastTime, roomId, roomPassword, map, mode, status, rules, bannerUrl, participants: {}, createdAt: Date.now() };
+            await db.ref('/tournaments').push(tournamentData);
+            toast("Tournament created!");
+            modal.remove();
+            if (currentSection === 'tournaments') renderTournamentsList(); else renderDashboard();
+        };
+    }
+
+    // ---------- TOURNAMENTS LIST ----------
+    async function renderTournamentsList() {
+        document.getElementById('appContent').innerHTML = `<div><h2 class="font-bold text-xl">All Tournaments</h2><div id="tourneyList" class="space-y-3 mt-3"></div></div>`;
+        const snap = await db.ref('/tournaments').once('value');
+        const tourneys = snap.val() || {};
+        const listDiv = document.getElementById('tourneyList');
+        if (!Object.keys(tourneys).length) { listDiv.innerHTML = '<div class="bg-white p-6 rounded-lg text-center">No tournaments</div>'; return; }
+        let html = '';
+        for (let [tid, t] of Object.entries(tourneys)) {
+            const participantsCount = t.participants ? Object.keys(t.participants).length : 0;
+            html += `
+                <div class="bg-white rounded-xl p-4 shadow-sm border">
+                    <div class="flex justify-between items-center"><h3 class="font-bold">${t.matchTitle}</h3><span class="text-xs px-2 py-1 rounded-full ${t.status==='Upcoming'?'bg-blue-100':t.status==='Live'?'bg-green-100':'bg-gray-200'}">${t.status}</span></div>
+                    <div class="text-sm text-gray-600">🎮 ${t.gameName} | ${t.matchType} | Entry ₹${t.entryFee} | Win ₹${t.winningPrize}</div>
+                    <div class="text-xs text-gray-500">👥 ${participantsCount}/${t.totalSlots} slots | 🗓️ ${new Date(t.matchDateTime).toLocaleString()}</div>
+                    <button onclick="viewParticipants('${tid}')" class="text-xs text-blue-500 mt-1">👥 View Participants</button>
+                    <div class="flex gap-2 mt-2"><button onclick="manageTournament('${tid}')" class="flex-1 bg-indigo-100 text-indigo-700 py-1 rounded">Manage</button><button onclick="deleteTournament('${tid}')" class="flex-1 bg-red-100 text-red-600 py-1 rounded">Delete</button></div>
+                </div>
+            `;
+        }
+        listDiv.innerHTML = html;
+    }
+    window.viewParticipants = async (tid) => {
+        const t = (await db.ref(`/tournaments/${tid}`).once('value')).val();
+        if (!t || !t.participants) return toast("No participants");
+        let msg = "Participants:\n";
+        for (let [uid, p] of Object.entries(t.participants)) {
+            msg += `${p.username || uid.slice(0,6)} - Game ID: ${p.gameId || 'N/A'}\n`;
+        }
+        alert(msg);
+    };
+    window.deleteTournament = async (tid) => { if(confirm("Delete?")){ await db.ref(`/tournaments/${tid}`).remove(); toast("Deleted"); renderTournamentsList(); } };
+    window.manageTournament = async (tid) => {
+        const t = (await db.ref(`/tournaments/${tid}`).once('value')).val();
+        if (!t) return;
+        const parts = t.participants ? Object.entries(t.participants).map(([uid,p])=>`<option value="${uid}">${p.username||uid} (${p.gameId||'no ID'})</option>`).join('') : '';
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 modal-overlay flex items-center justify-center z-50 p-3';
+        modal.innerHTML = `<div class="bg-white rounded-2xl max-w-md w-full max-h-[85vh] overflow-y-auto p-5 space-y-2"><h3 class="font-bold">Manage: ${t.matchTitle}</h3><select id="statusSelect" class="border p-2 rounded w-full"><option ${t.status==='Upcoming'?'selected':''}>Upcoming</option><option ${t.status==='Live'?'selected':''}>Live</option><option ${t.status==='Completed'?'selected':''}>Completed</option></select><input id="roomId" placeholder="Room ID" value="${t.roomId||''}" class="border p-2 rounded w-full"><input id="roomPassword" placeholder="Room Password" value="${t.roomPassword||''}" class="border p-2 rounded w-full"><select id="winnerSelect" class="border p-2 rounded w-full"><option value="">-- Declare Winner --</option>${parts}</select><button id="updateBtn" class="bg-teal-600 text-white w-full py-2 rounded">Update</button><button id="closeBtn" class="bg-gray-300 w-full py-2 rounded">Close</button></div>`;
+        document.body.appendChild(modal);
+        document.getElementById('closeBtn').onclick = () => modal.remove();
+        document.getElementById('updateBtn').onclick = async () => {
+            const newStatus = document.getElementById('statusSelect').value;
+            const roomId = document.getElementById('roomId').value;
+            const roomPassword = document.getElementById('roomPassword').value;
+            const winnerUid = document.getElementById('winnerSelect').value;
+            await db.ref(`/tournaments/${tid}`).update({ status: newStatus, roomId, roomPassword });
+            if (winnerUid && newStatus === 'Completed') {
+                await updateWallet(winnerUid, t.winningPrize, `Won tournament: ${t.matchTitle}`);
+                await db.ref(`/tournaments/${tid}/participants/${winnerUid}/result`).set("Winner");
+                toast(`₹${t.winningPrize} credited to winner!`);
+            }
+            modal.remove();
+            toast("Tournament updated");
+            renderTournamentsList();
+        };
+    };
+
+    // ---------- REQUESTS ----------
+    async function renderRequests() {
+        document.getElementById('appContent').innerHTML = `<div><h2 class="font-bold text-xl">Wallet Requests</h2><div><h3 class="font-semibold mt-2">💰 Add Money Requests</h3><div id="addReqList" class="space-y-2"></div><h3 class="font-semibold mt-4">💸 Withdraw Requests</h3><div id="wdReqList" class="space-y-2"></div></div></div>`;
+        const addSnap = await db.ref('/addMoneyRequests').orderByChild('status').equalTo('pending').once('value');
+        const addReqs = addSnap.val() || {};
+        const addDiv = document.getElementById('addReqList');
+        if (!Object.keys(addReqs).length) addDiv.innerHTML = '<div class="bg-gray-100 p-3 rounded text-center">No pending add money requests</div>';
+        else {
+            let html = '';
+            for (let [rid, req] of Object.entries(addReqs)) {
+                const user = (await db.ref(`/users/${req.uid}`).once('value')).val();
+                html += `<div class="bg-white p-3 rounded-lg shadow-sm flex justify-between items-center"><div><p class="font-semibold">${user?.username||req.uid}</p><p class="text-sm">₹${req.amount} | TXN: ${req.txnId}</p></div><div><button onclick="approveAdd('${rid}','${req.uid}',${req.amount})" class="bg-green-500 text-white px-3 py-1 rounded text-sm mr-1">Approve</button><button onclick="rejectReq('/addMoneyRequests','${rid}')" class="bg-red-400 text-white px-3 py-1 rounded text-sm">Reject</button></div></div>`;
+            }
+            addDiv.innerHTML = html;
+        }
+        const wdSnap = await db.ref('/withdrawRequests').orderByChild('status').equalTo('pending').once('value');
+        const wdReqs = wdSnap.val() || {};
+        const wdDiv = document.getElementById('wdReqList');
+        if (!Object.keys(wdReqs).length) wdDiv.innerHTML = '<div class="bg-gray-100 p-3 rounded text-center">No pending withdraw requests</div>';
+        else {
+            let html = '';
+            for (let [rid, req] of Object.entries(wdReqs)) {
+                const user = (await db.ref(`/users/${req.uid}`).once('value')).val();
+                html += `<div class="bg-white p-3 rounded-lg shadow-sm flex justify-between items-center"><div><p class="font-semibold">${user?.username||req.uid}</p><p class="text-sm">₹${req.amount} | UPI: ${req.upi_id}</p></div><div><button onclick="approveWd('${rid}','${req.uid}',${req.amount})" class="bg-green-500 text-white px-3 py-1 rounded text-sm mr-1">Approve</button><button onclick="rejectReq('/withdrawRequests','${rid}')" class="bg-red-400 text-white px-3 py-1 rounded text-sm">Reject</button></div></div>`;
+            }
+            wdDiv.innerHTML = html;
+        }
+    }
+    window.approveAdd = async (rid, uid, amt) => { try{ await updateWallet(uid, amt, "Add money approved"); await db.ref(`/addMoneyRequests/${rid}`).update({status:'approved'}); toast(`₹${amt} credited`); renderRequests(); } catch(e){ toast(e.message); } };
+    window.approveWd = async (rid, uid, amt) => { try{ await updateWallet(uid, -amt, "Withdrawal processed"); await 
