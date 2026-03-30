@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Firebase Test</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+</head>
+<body style="background: #111; color: white; font-family: monospace; padding: 20px;">
+  <h2>Firebase Connection Test</h2>
+  <pre id="output"></pre>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCFrTLdB3OVrnKgC7y0awui_8V9XW04pEY",
+      authDomain: "ur-battle.firebaseapp.com",
+      projectId: "ur-battle",
+      storageBucket: "ur-battle.firebasestorage.app",
+      messagingSenderId: "246704992806",
+      appId: "1:246704992806:web:671a5a5b8912d69cdf2ce7"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    const out = document.getElementById('output');
+
+    async function runTest() {
+      out.innerText = "Testing Firestore...\n";
+      try {
+        // Write a test document
+        await db.collection('test').doc('ping').set({ time: Date.now() });
+        out.innerText += "✅ Firestore write successful.\n";
+        // Read it back
+        const doc = await db.collection('test').doc('ping').get();
+        if (doc.exists) {
+          out.innerText += "✅ Firestore read successful.\n";
+        } else {
+          out.innerText += "❌ Firestore read failed (doc not found).\n";
+        }
+      } catch (e) {
+        out.innerText += `❌ Firestore error: ${e.message}\n`;
+      }
+
+      out.innerText += "\nTesting Authentication...\n";
+      try {
+        // Try to sign in with a dummy user to check if Email/Password is enabled
+        await auth.signInWithEmailAndPassword("dummy@example.com", "wrong");
+      } catch (e) {
+        if (e.code === 'auth/user-not-found') {
+          out.innerText += "✅ Authentication working (user not found – expected).\n";
+        } else if (e.code === 'auth/wrong-password') {
+          out.innerText += "✅ Authentication working (wrong password – expected).\n";
+        } else if (e.code === 'auth/operation-not-allowed') {
+          out.innerText += "❌ Email/Password sign-in is not enabled in Firebase Console.\n";
+        } else {
+          out.innerText += `⚠️ Other auth error: ${e.message}\n`;
+        }
+      }
+    }
+
+    runTest();
+  </script>
+</body>
+</html>
