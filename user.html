@@ -1,117 +1,322 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes">
-    <title>UR BATTLE · Arena</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&display=swap" rel="stylesheet">
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-    <style>
-        * { font-family: 'Orbitron', sans-serif; }
-        body {
-            background: linear-gradient(135deg, #0a0f1e 0%, #0a0a1a 100%);
-            color: #e0e0e0;
-        }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #f97316; border-radius: 10px; }
-        .glass-card {
-            background: rgba(15, 25, 35, 0.85);
-            backdrop-filter: blur(8px);
-            border: 1px solid rgba(249, 115, 22, 0.3);
-            border-radius: 1.5rem;
-            transition: transform 0.2s ease, box-shadow 0.2s;
-        }
-        .glass-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px -5px rgba(249, 115, 22, 0.3);
-        }
-        .btn-primary {
-            background: linear-gradient(90deg, #f97316, #ea580c);
-            box-shadow: 0 4px 15px rgba(249,115,22,0.4);
-        }
-        .btn-primary:active { transform: scale(0.97); }
-        .bottom-nav a.active {
-            color: #f97316 !important;
-            text-shadow: 0 0 4px #f97316;
-        }
-        .bottom-nav a.active i { color: #f97316 !important; }
-        .live-badge { animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
-        .loader {
-            border: 3px solid rgba(249,115,22,0.3);
-            border-top: 3px solid #f97316;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .countdown {
-            font-family: monospace;
-            background: #00000066;
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 20px;
-            font-size: 0.7rem;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>UR BATTLE · Arena</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <style>
+    body { background: linear-gradient(135deg, #0a0f1e, #0a0a1a); color: #e0e0e0; font-family: system-ui, sans-serif; }
+    .card { background: rgba(15, 25, 35, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(249,115,22,0.3); border-radius: 1rem; padding: 1rem; margin-bottom: 1rem; }
+    .btn-primary { background: linear-gradient(90deg, #f97316, #ea580c); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; border: none; cursor: pointer; font-weight: bold; }
+    .btn-primary:active { transform: scale(0.97); }
+    input, select, textarea { background: #1f2937; border: 1px solid #4b5563; color: white; padding: 0.5rem; border-radius: 0.5rem; width: 100%; margin-bottom: 0.5rem; }
+    .bottom-nav a.active { color: #f97316; }
+    .bottom-nav a.active i { color: #f97316; }
+    .loader { border: 3px solid rgba(249,115,22,0.3); border-top: 3px solid #f97316; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 8px 16px; border-radius: 8px; z-index: 1000; font-size: 14px; }
+  </style>
 </head>
-<body class="bg-gray-900 font-sans">
+<body>
 
 <div class="max-w-md mx-auto min-h-screen relative pb-20">
-    <!-- Header -->
-    <div class="sticky top-0 z-30 bg-gradient-to-r from-gray-900/95 to-gray-800/95 backdrop-blur-md border-b border-orange-500/30 px-4 py-3 flex justify-between items-center shadow-lg">
-        <div class="flex items-center gap-2">
-            <i class="fas fa-skull text-orange-500 text-2xl"></i>
-            <h1 class="text-xl font-extrabold tracking-wider bg-gradient-to-r from-orange-400 to-orange-600 bg-clip-text text-transparent">UR BATTLE</h1>
-        </div>
-        <div class="flex items-center gap-3">
-            <button id="darkModeToggle" class="text-orange-400 text-xl"><i class="fas fa-bolt"></i></button>
-            <div class="bg-gradient-to-r from-orange-600 to-red-600 px-3 py-1.5 rounded-full text-white text-xs font-bold flex items-center gap-1 shadow-lg">
-                <i class="fas fa-coins text-yellow-300"></i> <span id="headerWallet">0</span>
-            </div>
-        </div>
+  <div class="sticky top-0 bg-gray-900/90 backdrop-blur-md border-b border-orange-500/30 px-4 py-3 flex justify-between items-center z-20">
+    <div class="flex items-center gap-2">
+      <i class="fas fa-skull text-orange-500 text-2xl"></i>
+      <h1 class="text-xl font-bold text-white">UR BATTLE</h1>
     </div>
+    <div class="bg-gradient-to-r from-orange-600 to-red-600 px-3 py-1 rounded-full text-white text-xs font-bold">
+      <i class="fas fa-coins text-yellow-300"></i> <span id="headerWallet">0</span>
+    </div>
+  </div>
 
-    <div id="appContent" class="px-4 py-4 space-y-5">
-        <div class="flex justify-center py-20"><div class="loader"></div></div>
-    </div>
+  <div id="appContent" class="p-4"><div class="loader"></div></div>
 
-    <!-- Bottom Navigation -->
-    <div id="bottomNav" class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-gray-900/90 backdrop-blur-md border-t border-orange-500/30 flex justify-around py-2 shadow-2xl z-30">
-        <a href="#" data-nav="home" class="flex flex-col items-center text-gray-400"><i class="fas fa-home text-xl"></i><span class="text-[11px]">Home</span></a>
-        <a href="#" data-nav="tournaments" class="flex flex-col items-center text-gray-400"><i class="fas fa-trophy text-xl"></i><span class="text-[11px]">Tourneys</span></a>
-        <a href="#" data-nav="myMatches" class="flex flex-col items-center text-gray-400"><i class="fas fa-calendar-alt text-xl"></i><span class="text-[11px]">My Matches</span></a>
-        <a href="#" data-nav="wallet" class="flex flex-col items-center text-gray-400"><i class="fas fa-wallet text-xl"></i><span class="text-[11px]">Wallet</span></a>
-        <a href="#" data-nav="profile" class="flex flex-col items-center text-gray-400"><i class="fas fa-user-circle text-xl"></i><span class="text-[11px]">Profile</span></a>
-    </div>
+  <div id="bottomNav" class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-gray-900/90 backdrop-blur-md border-t border-orange-500/30 flex justify-around py-2 z-20 hidden">
+    <a href="#" data-nav="home" class="text-gray-400"><i class="fas fa-home text-xl"></i><span class="text-xs block">Home</span></a>
+    <a href="#" data-nav="tournaments" class="text-gray-400"><i class="fas fa-trophy text-xl"></i><span class="text-xs block">Tourneys</span></a>
+    <a href="#" data-nav="myMatches" class="text-gray-400"><i class="fas fa-calendar-alt text-xl"></i><span class="text-xs block">My Matches</span></a>
+    <a href="#" data-nav="wallet" class="text-gray-400"><i class="fas fa-wallet text-xl"></i><span class="text-xs block">Wallet</span></a>
+    <a href="#" data-nav="profile" class="text-gray-400"><i class="fas fa-user-circle text-xl"></i><span class="text-xs block">Profile</span></a>
+  </div>
 </div>
 
 <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyCFrTLdB3OVrnKgC7y0awui_8V9XW04pEY",
-        authDomain: "ur-battle.firebaseapp.com",
-        databaseURL: "https://ur-battle-default-rtdb.firebaseio.com",
-        projectId: "ur-battle",
-        storageBucket: "ur-battle.firebasestorage.app",
-        messagingSenderId: "246704992806",
-        appId: "1:246704992806:web:671a5a5b8912d69cdf2ce7"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
+  // ==================== FIREBASE CONFIG ====================
+  const firebaseConfig = {
+    apiKey: "AIzaSyCFrTLdB3OVrnKgC7y0awui_8V9XW04pEY",
+    authDomain: "ur-battle.firebaseapp.com",
+    projectId: "ur-battle",
+    storageBucket: "ur-battle.firebasestorage.app",
+    messagingSenderId: "246704992806",
+    appId: "1:246704992806:web:671a5a5b8912d69cdf2ce7"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
-    const CURRENT_APP_VERSION = "2.0.0";
-    let currentUser = null;
-    let currentUserData = null;
-    let currentSection = 'home';
-    let tournamentsCache = null;
+  let currentUser = null;
+  let currentUserData = null;
+  let currentSection = 'home';
+  let tournamentsCache = null;
+
+  function toast(msg) { alert(msg); } // simple fallback
+  function formatDate(ts) { return ts ? new Date(ts).toLocaleString() : 'TBD'; }
+  function updateHeaderWallet(balance) { document.getElementById('headerWallet').innerText = Math.floor(balance || 0); }
+
+  // Firestore helpers
+  async function getUserData(uid) {
+    const doc = await db.collection('users').doc(uid).get();
+    return doc.exists ? doc.data() : null;
+  }
+
+  async function updateUserWallet(uid, delta, reason) {
+    const userRef = db.collection('users').doc(uid);
+    await db.runTransaction(async (transaction) => {
+      const doc = await transaction.get(userRef);
+      const current = doc.data()?.wallet || 0;
+      const newBal = current + delta;
+      if (newBal < 0) throw new Error('Insufficient balance');
+      transaction.update(userRef, { wallet: newBal });
+      transaction.set(db.collection('transactions').doc(), {
+        uid, type: delta > 0 ? 'credit' : 'debit', amount: Math.abs(delta),
+        description: reason, timestamp: Date.now()
+      });
+    });
+    if (uid === currentUser?.uid) updateHeaderWallet((await getUserData(uid)).wallet);
+  }
+
+  // Authentication UI
+  function renderAuth() {
+    document.getElementById('appContent').innerHTML = `
+      <div class="card text-center mt-8">
+        <div class="flex gap-3 border-b border-orange-500/30 mb-5">
+          <button id="loginTabBtn" class="py-2 px-4 font-bold text-orange-400 border-b-2 border-orange-500">LOGIN</button>
+          <button id="signupTabBtn" class="py-2 px-4 font-bold text-gray-400">SIGN UP</button>
+        </div>
+        <div id="loginPanel">
+          <input type="email" id="loginEmail" placeholder="Email">
+          <input type="password" id="loginPassword" placeholder="Password">
+          <button id="doLogin" class="btn-primary w-full">ENTER ARENA</button>
+          <hr class="my-3">
+          <button id="googleLoginBtn" class="bg-red-600 w-full py-2 rounded">Google Sign In</button>
+          <div class="text-right mt-2"><button id="forgotPwdBtn" class="text-xs text-orange-400">Forgot Password?</button></div>
+        </div>
+        <div id="signupPanel" class="hidden">
+          <input type="text" id="signupName" placeholder="Username">
+          <input type="email" id="signupEmail" placeholder="Email">
+          <input type="text" id="signupGameId" placeholder="Game ID (BGMI/FF)">
+          <input type="password" id="signupPassword" placeholder="Password">
+          <input type="text" id="referralCode" placeholder="Referral Code (optional)">
+          <button id="doSignup" class="bg-green-600 w-full py-2 rounded">CREATE ACCOUNT</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('loginTabBtn').onclick = () => { document.getElementById('loginPanel').classList.remove('hidden'); document.getElementById('signupPanel').classList.add('hidden'); };
+    document.getElementById('signupTabBtn').onclick = () => { document.getElementById('signupPanel').classList.remove('hidden'); document.getElementById('loginPanel').classList.add('hidden'); };
+    document.getElementById('doLogin').onclick = async () => {
+      const email = document.getElementById('loginEmail').value;
+      const pwd = document.getElementById('loginPassword').value;
+      try { await auth.signInWithEmailAndPassword(email, pwd); } catch(e) { toast(e.message); }
+    };
+    document.getElementById('forgotPwdBtn').onclick = async () => {
+      const email = prompt("Enter your email:");
+      if (email) try { await auth.sendPasswordResetEmail(email); toast("Reset link sent to email"); } catch(e) { toast(e.message); }
+    };
+    document.getElementById('doSignup').onclick = async () => {
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value.trim();
+      const gameId = document.getElementById('signupGameId').value.trim();
+      const pwd = document.getElementById('signupPassword').value;
+      const referral = document.getElementById('referralCode').value.trim();
+      if (!name || !email || !gameId || !pwd) return toast("All fields required");
+      try {
+        const cred = await auth.createUserWithEmailAndPassword(email, pwd);
+        const uid = cred.user.uid;
+        const ownRefCode = uid.slice(0,8);
+        await db.collection('users').doc(uid).set({
+          username: name, email, gameId, wallet: 100, createdAt: Date.now(),
+          isBanned: false, photoURL: '', referralCode: ownRefCode, referredBy: referral || null,
+          referralEarnings: 0
+        });
+        if (referral) {
+          const refSnap = await db.collection('users').where('referralCode', '==', referral).limit(1).get();
+          if (!refSnap.empty) {
+            const referrerId = refSnap.docs[0].id;
+            await updateUserWallet(referrerId, 50, `Referral bonus for inviting ${name}`);
+            await updateUserWallet(uid, 20, "Referral signup bonus");
+          } else {
+            await updateUserWallet(uid, 10, "Welcome bonus");
+          }
+        } else {
+          await updateUserWallet(uid, 10, "Welcome bonus");
+        }
+        toast("Account created! Please login.");
+      } catch(e) { toast(e.message); }
+    };
+    document.getElementById('googleLoginBtn').onclick = async () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      try {
+        const result = await auth.signInWithPopup(provider);
+        const user = result.user;
+        const doc = await db.collection('users').doc(user.uid).get();
+        if (!doc.exists) {
+          const ownRefCode = user.uid.slice(0,8);
+          await db.collection('users').doc(user.uid).set({
+            username: user.displayName || user.email.split('@')[0],
+            email: user.email, gameId: '', wallet: 100, createdAt: Date.now(),
+            isBanned: false, photoURL: user.photoURL || '', referralCode: ownRefCode,
+            referredBy: null, referralEarnings: 0
+          });
+          await updateUserWallet(user.uid, 10, "Welcome bonus");
+        }
+        toast("Google sign-in success");
+      } catch(e) { toast(e.message); }
+    };
+  }
+
+  // Load tournaments from Firestore with caching
+  async function loadTournamentsCache() {
+    if (!tournamentsCache) {
+      const snapshot = await db.collection('tournaments').get();
+      tournamentsCache = {};
+      snapshot.forEach(doc => { tournamentsCache[doc.id] = doc.data(); });
+    }
+    return tournamentsCache;
+  }
+
+  // Join tournament with Game ID prompt
+  async function joinTournament(tid, fee, gameId) {
+    if (window.pendingJoin) return;
+    window.pendingJoin = true;
+    const tournamentRef = db.collection('tournaments').doc(tid);
+    const tournamentDoc = await tournamentRef.get();
+    const tournament = tournamentDoc.data();
+    if (!tournament || tournament.status !== 'Upcoming') { toast("Tournament not available"); window.pendingJoin = false; return; }
+    if (tournament.participants && tournament.participants[currentUser.uid]) { toast("Already joined"); window.pendingJoin = false; return; }
+    if ((currentUserData?.wallet || 0) < fee) { toast("Insufficient balance"); window.pendingJoin = false; return; }
+    try {
+      await updateUserWallet(currentUser.uid, -fee, `Joined tournament: ${tournament.title}`);
+      await tournamentRef.update({
+        [`participants.${currentUser.uid}`]: {
+          username: currentUserData.username,
+          gameId: gameId,
+          result: 'Participated',
+          joinedAt: Date.now()
+        }
+      });
+      toast("Joined successfully!");
+      tournamentsCache = null; // invalidate cache
+      if (currentSection === 'home') renderHome();
+      else if (currentSection === 'tournaments') renderTournaments();
+      else if (currentSection === 'myMatches') renderMyMatches();
+    } catch(e) { toast(e.message); }
+    window.pendingJoin = false;
+  }
+
+  // Tournament details modal (with participants list)
+  async function showTournamentDetails(tid, tournament) {
+    const participants = tournament.participants ? Object.entries(tournament.participants) : [];
+    const participantCount = participants.length;
+    const isJoined = tournament.participants && tournament.participants[currentUser.uid];
+    let participantsHtml = '<div class="mt-4"><p class="text-sm font-semibold text-orange-400">PARTICIPANTS (' + participantCount + '/' + (tournament.totalSlots || '∞') + '):</p><div class="max-h-40 overflow-y-auto text-xs space-y-1 mt-1">';
+    if (participantCount === 0) {
+      participantsHtml += '<div class="text-gray-500">No one has joined yet. Be the first!</div>';
+    } else {
+      for (let [uid, p] of participants) {
+        participantsHtml += `<div class="flex justify-between border-b border-gray-700 py-1"><span>${p.username || uid.slice(0,6)}</span><span class="text-gray-400">ID: ${p.gameId || 'N/A'}</span></div>`;
+      }
+    }
+    participantsHtml += '</div></div>';
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+      <div class="bg-gray-900 rounded-2xl max-w-md w-full max-h-[85vh] overflow-y-auto p-5 border border-orange-500/30">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-xl font-bold text-orange-400">${tournament.title}</h2>
+          <button id="closeModalBtn" class="text-gray-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <div class="space-y-3 text-sm">
+          <div class="flex justify-between"><span>🎮 Game:</span><span class="font-semibold">${tournament.game}</span></div>
+          <div class="flex justify-between"><span>⚔️ Mode:</span><span class="font-semibold">${tournament.matchType || 'Solo'}</span></div>
+          <div class="flex justify-between"><span>💰 Entry Fee:</span><span class="text-orange-400 font-bold">₹${tournament.entryFee}</span></div>
+          <div class="flex justify-between"><span>🏆 Winning Prize:</span><span class="text-green-400">₹${tournament.winningPrize}</span></div>
+          <div class="flex justify-between"><span>🔫 Per Kill Reward:</span><span>₹${tournament.perKillReward || 0}</span></div>
+          <div class="flex justify-between"><span>🗺️ Map:</span><span>${tournament.map || 'Any'}</span></div>
+          <div class="flex justify-between"><span>👥 Slots:</span><span>${participantCount}/${tournament.totalSlots}</span></div>
+          <div class="flex justify-between"><span>📅 Match Time:</span><span>${formatDate(tournament.matchTime)}</span></div>
+          ${tournament.rules ? `<div><span>📜 Rules:</span><div class="text-xs text-gray-300 mt-1">${tournament.rules.replace(/\n/g, '<br>')}</div></div>` : ''}
+          ${participantsHtml}
+        </div>
+        ${isJoined ? '<button disabled class="mt-5 w-full bg-gray-700 text-gray-400 py-2 rounded-xl">ALREADY JOINED</button>' : `<button id="joinFromModalBtn" class="mt-5 w-full btn-primary text-white py-2 rounded-xl">JOIN TOURNAMENT</button>`}
+      </div>
+    `;
+    document.body.appendChild(modal);
+    document.getElementById('closeModalBtn').onclick = () => modal.remove();
+    if (!isJoined) {
+      document.getElementById('joinFromModalBtn').onclick = async () => {
+        const gameId = prompt("Enter your Game ID:");
+        if (!gameId) return;
+        await joinTournament(tid, tournament.entryFee, gameId);
+        modal.remove();
+      };
+    }
+  }
+
+  // ----- HOME -----
+  async function renderHome() {
+    const container = document.getElementById('appContent');
+    container.innerHTML = `
+      <div class="card flex justify-between items-center">
+        <div><p class="text-sm text-gray-300">Welcome back,</p><p class="text-xl font-bold text-orange-400">${currentUserData?.username || 'SOLDIER'}</p></div>
+        <i class="fas fa-user-astronaut text-4xl text-orange-500"></i>
+      </div>
+      <div class="relative rounded-xl overflow-hidden h-32 bg-gradient-to-r from-orange-800 to-red-900 flex items-center justify-center text-white font-bold text-lg">🔥 DAILY BONUS: 20% EXTRA 🔥</div>
+      <div><h2 class="font-bold text-lg flex items-center gap-2"><i class="fas fa-fire text-orange-500"></i> LIVE NOW</h2><div id="liveMatchHome" class="mt-2"></div></div>
+      <div><h2 class="font-bold text-lg flex items-center gap-2"><i class="fas fa-calendar-week text-orange-500"></i> UPCOMING</h2><div id="upcomingHomeList" class="space-y-3 mt-2"></div></div>
+    `;
+    const tournaments = await loadTournamentsCache();
+    const live = Object.entries(tournaments).find(([_, t]) => t.status === 'Live');
+    const liveDiv = document.getElementById('liveMatchHome');
+    if (live) {
+      const [tid, t] = live;
+      liveDiv.innerHTML = `<div class="card flex justify-between items-center"><div><p class="font-bold">${t.title}</p><p class="text-sm">${t.game} | ₹${t.entryFee}</p><p class="text-xs text-orange-400">LIVE</p></div><button onclick="showTournamentDetails('${tid}', ${JSON.stringify(t).replace(/"/g, '&quot;')})" class="bg-red-600 text-white px-3 py-1 rounded text-sm">DETAILS</button></div>`;
+    } else liveDiv.innerHTML = '<div class="card text-center text-gray-400">No live matches</div>';
+    const upcoming = Object.entries(tournaments).filter(([_, t]) => t.status === 'Upcoming').slice(0,3);
+    const upcomingDiv = document.getElementById('upcomingHomeList');
+    if (!upcoming.length) { upcomingDiv.innerHTML = '<div class="card text-center text-gray-400">No upcoming tournaments</div>'; return; }
+    let html = '';
+    for (let [tid, t] of upcoming) {
+      html += `<div class="card flex justify-between items-center"><div><p class="font-bold">${t.title}</p><p class="text-xs">${t.game} | ₹${t.entryFee}</p><p class="text-xs text-gray-400">${formatDate(t.matchTime)}</p></div><button onclick="showTournamentDetails('${tid}', ${JSON.stringify(t).replace(/"/g, '&quot;')})" class="btn-primary text-white px-3 py-1 rounded text-sm">DETAILS</button></div>`;
+    }
+    upcomingDiv.innerHTML = html;
+  }
+
+  // ----- TOURNAMENTS (full list with filter) -----
+  async function renderTournaments() {
+    const container = document.getElementById('appContent');
+    container.innerHTML = `<div><div class="flex gap-2 mb-3"><input id="filterGame" placeholder="Game name" class="w-full"><input id="filterMaxFee" type="number" placeholder="Max fee" class="w-1/3"></div><button id="applyFilter" class="btn-primary text-white px-4 py-1 rounded text-sm mb-3">FILTER</button><div id="tournamentListFull" class="space-y-3"></div></div>`;
+    await loadTournamentListFull();
+    document.getElementById('applyFilter').onclick = () => loadTournamentListFull();
+  }
+  async function loadTournamentListFull() {
+    const gameFilter = document.getElementById('filterGame')?.value.toLowerCase() || '';
+    const maxFee = parseInt(document.getElementById('filterMaxFee')?.value) || Infinity;
+    const tournaments = await loadTournamentsCache();
+    let list = Object.entries(tournaments).filter(([_, t]) => t.status === 'Upcoming');
+    if (gameFilter) list = list.filter(([_, t]) => (t.game || '').toLowerCase().includes(gameFilter));
+    if (maxFee !== Infinity) list = list.filter(([_, t]) => (t.entryFee || 0) <= maxFee);
+    const container = document.getElementById('tournamentListFull');
+    if (!list.length) { container.innerHTML = '<div class="card text-center text-gray-400">No tournaments</div>'; return; }
+    let html = '';
+    for (let [tid, t] of list) {
+      const joined = t.participants && t.participants[currentUser.uid];
+      html += `<div class="card"><div class="flex justify-between"><h3 class="font-bold">${t.title}</h3><span class="text-xs bg-orange-900/50 px-2 py-1 rounded">${t.game}</span></div><div class="grid grid-cols-2 gap-1 text-sm mt-1"><span>💰 Entry: ₹${t.entryFee}</span><span>🏆 Prize: ₹${t.winningPrize}</span><span>🔫 Kill: ₹${t.perKillReward || 0}</span><span>🗺️ ${t.map ||     let tournamentsCache = null;
     let joinedTournamentListeners = {}; // store listeners to detach later
 
     function toast(msg) { alert(msg); }
